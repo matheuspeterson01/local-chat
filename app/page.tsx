@@ -29,9 +29,9 @@ export default function LocalChat() {
   const [isConnected, setIsConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<string>("Conectando...")
 
-  // Refs para gerenciar as subscriptions
-  const messagesChannelRef = useRef<any>(null)
+  // Referências para conexões
   const usersChannelRef = useRef<any>(null)
+  const socketRef = useRef<WebSocket | null>(null)
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -64,17 +64,18 @@ export default function LocalChat() {
     checkDatabase()
   }, [])
 
-  // Fetch initial data and setup subscriptions
+  // Fetch initial data and setup connections
   useEffect(() => {
     if (user && databaseReady) {
       fetchMessages()
       fetchUsers()
       setupRealtimeSubscriptions()
+      setupWebSocket()
     }
 
-    // Cleanup subscriptions when user changes or component unmounts
     return () => {
       cleanupSubscriptions()
+      cleanupWebSocket()
     }
   }, [user, databaseReady])
 
@@ -126,6 +127,50 @@ export default function LocalChat() {
     }
   }
 
+  const setupWebSocket = () => {
+    const url = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://localhost:3001"
+    console.log("🌐 Connecting to WebSocket:", url)
+    const socket = new WebSocket(url)
+    socketRef.current = socket
+
+    socket.addEventListener("open", () => {
+      console.log("🟢 WebSocket connected")
+      setConnectionStatus("Conectado - WebSocket")
+      setIsConnected(true)
+    })
+
+    socket.addEventListener("message", (event) => {
+      try {
+        const message: Message = JSON.parse(event.data)
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === message.id)
+          if (exists) return prev
+          return [...prev, message]
+        })
+      } catch (err) {
+        console.error("Error parsing websocket message", err)
+      }
+    })
+
+    socket.addEventListener("close", () => {
+      console.log("🔌 WebSocket disconnected")
+      setIsConnected(false)
+    })
+
+    socket.addEventListener("error", (err) => {
+      console.error("WebSocket error", err)
+      setConnectionStatus("Erro WebSocket")
+    })
+  }
+
+  const cleanupWebSocket = () => {
+    if (socketRef.current) {
+      console.log("Closing WebSocket connection")
+      socketRef.current.close()
+      socketRef.current = null
+    }
+  }
+
   const setupRealtimeSubscriptions = () => {
     console.log("🔄 Setting up realtime subscriptions...")
 
@@ -133,6 +178,7 @@ export default function LocalChat() {
     cleanupSubscriptions()
 
     try {
+
       // Setup messages subscription
       messagesChannelRef.current = supabase
         .channel("public:messages", {
@@ -244,12 +290,6 @@ export default function LocalChat() {
   const cleanupSubscriptions = () => {
     console.log("🧹 Cleaning up subscriptions...")
 
-    if (messagesChannelRef.current) {
-      supabase.removeChannel(messagesChannelRef.current)
-      messagesChannelRef.current = null
-      console.log("✅ Messages channel removed")
-    }
-
     if (usersChannelRef.current) {
       supabase.removeChannel(usersChannelRef.current)
       usersChannelRef.current = null
@@ -270,13 +310,24 @@ export default function LocalChat() {
           user_id: user.id,
           content: newMessage.trim(),
         })
-        .select()
+        .select(
+          `
+          *,
+          profiles (
+            username,
+            avatar_url
+          )
+        `
+        )
+        .single()
 
       if (error) {
         console.error("❌ Error sending message:", error)
         alert("Erro ao enviar mensagem. Tente novamente.")
-      } else {
+      } else if (data) {
         console.log("✅ Message sent successfully:", data)
+        socketRef.current?.send(JSON.stringify(data))
+        setMessages((prev) => [...prev, data])
         setNewMessage("")
       }
     } catch (error) {
