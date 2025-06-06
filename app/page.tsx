@@ -187,18 +187,17 @@ export default function LocalChat() {
             }
           },
         )
-        .on("subscribe", (status) => {
-          console.log("📡 Messages subscription status:", status)
-          if (status === "SUBSCRIBED") {
-            setConnectionStatus("Conectado - Mensagens")
-          }
-        })
         .on("error", (error) => {
           console.error("❌ Messages subscription error:", error)
           setConnectionStatus("Erro na conexão")
           setIsConnected(false)
         })
-        .subscribe()
+        .subscribe((status) => {
+          console.log("📡 Messages subscription status:", status)
+          if (status === "SUBSCRIBED") {
+            setConnectionStatus("Conectado - Mensagens")
+          }
+        })
 
       // Setup users subscription
       usersChannelRef.current = supabase
@@ -221,19 +220,18 @@ export default function LocalChat() {
             fetchUsers()
           },
         )
-        .on("subscribe", (status) => {
+        .on("error", (error) => {
+          console.error("❌ Profiles subscription error:", error)
+          setConnectionStatus("Erro na conexão")
+          setIsConnected(false)
+        })
+        .subscribe((status) => {
           console.log("📡 Profiles subscription status:", status)
           if (status === "SUBSCRIBED") {
             setConnectionStatus("Conectado - Tempo Real")
             setIsConnected(true)
           }
         })
-        .on("error", (error) => {
-          console.error("❌ Profiles subscription error:", error)
-          setConnectionStatus("Erro na conexão")
-          setIsConnected(false)
-        })
-        .subscribe()
 
       console.log("✅ Realtime subscriptions setup complete")
     } catch (error) {
