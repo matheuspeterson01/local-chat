@@ -178,6 +178,73 @@ export default function LocalChat() {
     cleanupSubscriptions()
 
     try {
+
+      // Setup messages subscription
+      messagesChannelRef.current = supabase
+        .channel("public:messages", {
+          config: {
+            broadcast: { self: true },
+            presence: { key: user?.id },
+          },
+        })
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+          },
+          async (payload) => {
+            console.log("📨 New message received:", payload)
+
+            try {
+              // Fetch the complete message with profile data
+              const { data, error } = await supabase
+                .from("messages")
+                .select(`
+                  *,
+                  profiles (
+                    username,
+                    avatar_url
+                  )
+                `)
+                .eq("id", payload.new.id)
+                .single()
+
+              if (error) {
+                console.error("Error fetching new message details:", error)
+                return
+              }
+
+              if (data) {
+                console.log("✅ Adding new message to state:", data)
+                setMessages((prev) => {
+                  // Evitar duplicatas
+                  const exists = prev.some((msg) => msg.id === data.id)
+                  if (exists) {
+                    console.log("Message already exists, skipping")
+                    return prev
+                  }
+                  return [...prev, data]
+                })
+              }
+            } catch (error) {
+              console.error("Error processing new message:", error)
+            }
+          },
+        )
+        .on("error", (error) => {
+          console.error("❌ Messages subscription error:", error)
+          setConnectionStatus("Erro na conexão")
+          setIsConnected(false)
+        })
+        .subscribe((status) => {
+          console.log("📡 Messages subscription status:", status)
+          if (status === "SUBSCRIBED") {
+            setConnectionStatus("Conectado - Mensagens")
+          }
+        })
+
       // Setup users subscription
       usersChannelRef.current = supabase
         .channel("public:profiles", {
