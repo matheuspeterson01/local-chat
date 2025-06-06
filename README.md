@@ -1,6 +1,6 @@
 # local-chat
-# local-chat
-# Local development
+
+## Local development
 
 Run the WebSocket server in another terminal:
 
