@@ -48,6 +48,7 @@ export function SetupGuide() {
                 <div>NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase</div>
                 <div>NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anonima</div>
                 <div>SUPABASE_SERVICE_ROLE_KEY=sua_chave_de_servico</div>
+                <div>NEXT_PUBLIC_WEBSOCKET_URL=ws://localhost:3001</div>
               </div>
             </div>
 
